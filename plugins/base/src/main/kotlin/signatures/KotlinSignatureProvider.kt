@@ -7,6 +7,7 @@ import org.jetbrains.dokka.links.DriOfAny
 import org.jetbrains.dokka.links.DriOfUnit
 import org.jetbrains.dokka.links.sureClassNames
 import org.jetbrains.dokka.model.*
+import org.jetbrains.dokka.model.properties.ExtraProperty
 import org.jetbrains.dokka.model.properties.WithExtraProperties
 import org.jetbrains.dokka.pages.ContentKind
 import org.jetbrains.dokka.pages.ContentNode
@@ -89,6 +90,11 @@ class KotlinSignatureProvider(ctcc: CommentsToContentConverter, logger: DokkaLog
 
     private fun propertySignature(p: DProperty, platformData: Set<PlatformData> = p.platformData.toSet()) =
         contentBuilder.contentFor(p, ContentKind.Symbol, setOf(TextStyle.Monospace), platformData = platformData) {
+            platformText(p.visibility) { (it.takeIf { it !in ignoredVisibilities }?.name ?: "") + " " }
+            platformText(p.modifier) { it.name + " " }
+            text(p.additionModifiers())
+            link(p.name, p.dri)
+            text(": ")
             signatureForProjection(p.type)
         }
 
@@ -96,6 +102,7 @@ class KotlinSignatureProvider(ctcc: CommentsToContentConverter, logger: DokkaLog
         contentBuilder.contentFor(f, ContentKind.Symbol, setOf(TextStyle.Monospace), platformData = platformData) {
             platformText(f.visibility) { (it.takeIf { it !in ignoredVisibilities }?.name ?: "") + " " }
             platformText(f.modifier) { it.name + " " }
+            text(f.additionModifiers())
             text("fun ")
             list(f.generics, prefix = "<", suffix = "> ") {
                 +buildSignature(it)
@@ -107,6 +114,7 @@ class KotlinSignatureProvider(ctcc: CommentsToContentConverter, logger: DokkaLog
             link(f.name, f.dri)
             text("(")
             list(f.parameters) {
+                text(it.additionModifiers())
                 text(it.name!!)
                 text(": ")
 

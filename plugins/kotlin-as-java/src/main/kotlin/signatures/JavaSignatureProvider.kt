@@ -10,6 +10,7 @@ import org.jetbrains.dokka.pages.ContentKind
 import org.jetbrains.dokka.pages.ContentNode
 import org.jetbrains.dokka.pages.TextStyle
 import org.jetbrains.dokka.utilities.DokkaLogger
+import kotlin.text.Typography.nbsp
 
 class JavaSignatureProvider(ctcc: CommentsToContentConverter, logger: DokkaLogger) : SignatureProvider {
     private val contentBuilder = PageContentBuilder(ctcc, this, logger)
@@ -62,22 +63,29 @@ class JavaSignatureProvider(ctcc: CommentsToContentConverter, logger: DokkaLogge
     }
 
     private fun signature(p: DProperty) = contentBuilder.contentFor(p, ContentKind.Symbol, setOf(TextStyle.Monospace)) {
+        platformText(p.visibility) { (it.takeIf { it !in ignoredVisibilities }?.name ?: "") + " " }
+        platformText(p.modifier) { it.name + " " }
+        text(p.additionModifiers())
         signatureForProjection(p.type)
+        text(nbsp.toString())
+        link(p.name, p.dri)
     }
 
     private fun signature(f: DFunction) = contentBuilder.contentFor(f, ContentKind.Symbol, setOf(TextStyle.Monospace)) {
         platformText(f.modifier){ it.takeIf{it !in ignoredModifiers}?.name.orEmpty() + " "}
+        text(f.additionModifiers())
         val returnType = f.type
         signatureForProjection(returnType)
-        text("  ")
+        text(nbsp.toString())
         link(f.name, f.dri)
         list(f.generics, prefix = "<", suffix = ">") {
             +buildSignature(it)
         }
         text("(")
         list(f.parameters) {
+            text(it.additionModifiers())
             signatureForProjection(it.type)
-            text(" ")
+            text(nbsp.toString())
             link(it.name!!, it.dri)
         }
         text(")")

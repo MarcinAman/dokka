@@ -99,28 +99,85 @@ open class DefaultPageCreator(
         dri: DRI,
         platformData: List<PlatformData>
     ) = contentBuilder.contentFor(s as Documentable) {
-        block("Types", 2, ContentKind.Classlikes, s.classlikes, platformData.toSet()) {
-            link(it.name.orEmpty(), it.dri)
-            group {
-                platformDependentHint(it.dri, it.platformData.toSet()) {
-                    +buildSignature(it)
-                }
-                group(kind = ContentKind.BriefComment) {
-                    text(it.briefDocumentation())
+        if (s.classlikes.any()) {
+            header(2) { text("Types") }
+            table(ContentKind.Classlikes) {
+                s.classlikes.groupBy { it.name }.map { (name, classlikes) ->
+                    buildGroup(classlikes.map { it.dri }.toSet(), classlikes.flatMap { it.platformData }.toSet()) {
+                        link(name.orEmpty(), classlikes.first().dri)
+                        divergentGroup(classlikes.map { it.dri }.toSet(), classlikes.flatMap { it.platformData }.toSet()) {
+                            classlikes.map {
+                                instance(setOf(it.dri), it.platformData.toSet()) {
+                                    divergent {
+                                        +buildSignature(it)
+                                    }
+                                    after {
+                                        group(kind = ContentKind.BriefComment) {
+                                            text(it.briefDocumentation())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
-        block("Functions", 2, ContentKind.Functions, s.functions, platformData.toSet()) {
-            link(it.name, it.dri)
-            group {
-                platformDependentHint(it.dri, it.platformData.toSet()) {
-                    +buildSignature(it)
-                }
-                group(kind = ContentKind.BriefComment) {
-                    text(it.briefDocumentation())
+
+//        block("Types", 2, ContentKind.Classlikes, s.classlikes, platformData.toSet()) {
+//            link(it.name.orEmpty(), it.dri)
+//            group {
+//                divergent {
+//                    divergent {
+//                        platformDependentHint(it.dri, it.platformData.toSet()) {
+//                            +buildSignature(it)
+//                        }
+//                    }
+//                    after {
+//                        group(kind = ContentKind.BriefComment) {
+//                            text(it.briefDocumentation())
+//                        }
+//                    }
+//                }
+//            }
+//        }
+        if (s.functions.any()) {
+            header(2) { text("Functions") }
+            table(ContentKind.Functions) {
+                s.functions.groupBy { it.name }.map { (name, functions) ->
+                    buildGroup(functions.map { it.dri }.toSet(), functions.flatMap { it.platformData }.toSet()) {
+                        link(name, functions.first().dri)
+                        divergentGroup(functions.map { it.dri }.toSet(), functions.flatMap { it.platformData }.toSet()) {
+                            functions.map {
+                                instance(setOf(it.dri), it.platformData.toSet()) {
+                                    divergent {
+                                        +buildSignature(it)
+                                    }
+                                    after {
+                                        it.briefDocumentation().takeIf(String::isNotBlank)?.let {
+                                            group(kind = ContentKind.BriefComment) {
+                                                text(it)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+//        block("Functions", 2, ContentKind.Functions, s.functions, platformData.toSet()) {
+//            link(it.name, it.dri)
+//            group {
+//                platformDependentHint(it.dri, it.platformData.toSet()) {
+//                    +buildSignature(it)
+//                }
+//                group(kind = ContentKind.BriefComment) {
+//                    text(it.briefDocumentation())
+//                }
+//            }
+//        }
         block("Properties", 2, ContentKind.Properties, s.properties, platformData.toSet()) {
             link(it.name, it.dri)
             group {
@@ -140,13 +197,13 @@ open class DefaultPageCreator(
                     emptyList(),
                     map.entries.flatMap { entry -> entry.value.map { Pair(entry.key, it) } }
                         .groupBy({ it.second }, { it.first }).map { (classlike, platforms) ->
-                        buildGroup(dri, platforms.toSet(), ContentKind.Inheritors) {
-                            link(
-                                classlike.classNames?.substringBeforeLast(".") ?: classlike.toString()
-                                    .also { logger.warn("No class name found for DRI $classlike") }, classlike
-                            )
-                        }
-                    },
+                            buildGroup(setOf(dri), platforms.toSet(), ContentKind.Inheritors) {
+                                link(
+                                    classlike.classNames?.substringBeforeLast(".") ?: classlike.toString()
+                                        .also { logger.warn("No class name found for DRI $classlike") }, classlike
+                                )
+                            }
+                        },
                     DCI(setOf(dri), ContentKind.Inheritors),
                     platformData.toSet(),
                     style = emptySet()
@@ -312,7 +369,7 @@ open class DefaultPageCreator(
         return contentBuilder.contentFor(d) {
             if (tags.isNotEmpty()) {
                 header(3) { text("Description") }
-                platformDependentHint(platformData = platforms.toSet()) {
+                group(platformData = platforms.toSet()) {
                     contentForDescription()
                     contentForParams()
                     contentForUnnamedTags()
@@ -323,13 +380,17 @@ open class DefaultPageCreator(
     }
 
     protected open fun contentForFunction(f: DFunction) = contentBuilder.contentFor(f) {
-        group(kind = ContentKind.Cover) {
-            header(1) { text(f.name) }
-            platformDependentHint(f.dri, f.platformData.toSet()) {
-                +buildSignature(f)
+        header(1) { text(f.name) }
+        divergentGroup {
+            instance(setOf(f.dri), f.platformData.toSet()) {
+                divergent {
+                    +buildSignature(f)
+                }
+                after {
+                    +contentForComments(f)
+                }
             }
         }
-        +contentForComments(f)
     }
 
     protected open fun contentForTypeAlias(t: DTypeAlias) = contentBuilder.contentFor(t) {
@@ -343,11 +404,11 @@ open class DefaultPageCreator(
     protected open fun TagWrapper.toHeaderString() = this.javaClass.toGenericString().split('.').last()
 
     //TODO: It isn't platform-aware and produces wrong docs Probably should use platformDependentHint
-    protected open fun Documentable.briefDocumentation() = " "
-//        documentation.values
-//            .firstOrNull()
-//            ?.children
-//            ?.firstOrNull()
-//            ?.root
-//            ?.docTagSummary() ?: ""
+    protected open fun Documentable.briefDocumentation() =
+        documentation.values
+            .firstOrNull()
+            ?.children
+            ?.firstOrNull()
+            ?.root
+            ?.docTagSummary() ?: ""
 }

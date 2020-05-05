@@ -62,7 +62,11 @@ open class CommonmarkRenderer(
         append("]($address)")
     }
 
-    override fun StringBuilder.buildList(node: ContentList, pageContext: ContentPage, platformRestriction: PlatformData?) {
+    override fun StringBuilder.buildList(
+        node: ContentList,
+        pageContext: ContentPage,
+        platformRestriction: Set<PlatformData>?
+    ) {
         buildParagraph()
         buildListLevel(node, pageContext)
         buildParagraph()
@@ -91,7 +95,7 @@ open class CommonmarkRenderer(
                 node.children,
                 pageContext,
                 "${node.extra.allOfType<SimpleAttr>().find { it.extraKey == "start" }?.extraValue
-                    ?: 1.also { context.logger.error("No starting number specified for ordered list in node ${pageContext.dri.first()}!")}}."
+                    ?: 1.also { context.logger.error("No starting number specified for ordered list in node ${pageContext.dri.first()}!") }}."
             )
         } else {
             buildListItem(node.children, pageContext, "*")
@@ -108,7 +112,7 @@ open class CommonmarkRenderer(
 
     override fun StringBuilder.buildPlatformDependent(content: PlatformHintedContent, pageContext: ContentPage) {
         val distinct = content.platforms.map {
-            it to StringBuilder().apply {buildContentNode(content.inner, pageContext, it) }.toString()
+            it to StringBuilder().apply { buildContentNode(content.inner, pageContext, setOf(it)) }.toString()
         }.groupBy(Pair<PlatformData, String>::second, Pair<PlatformData, String>::first)
 
         if (distinct.size == 1)
@@ -123,7 +127,11 @@ open class CommonmarkRenderer(
         append("Resource")
     }
 
-    override fun StringBuilder.buildTable(node: ContentTable, pageContext: ContentPage, platformRestriction: PlatformData?) {
+    override fun StringBuilder.buildTable(
+        node: ContentTable,
+        pageContext: ContentPage,
+        platformRestriction: Set<PlatformData>?
+    ) {
 
         buildParagraph()
         val size = node.children.firstOrNull()?.children?.size ?: 0

@@ -89,7 +89,7 @@ data class ContentResolvedLink(
         copy(extra = newExtras)
 }
 
-/** All links that do not need to be resolved */
+/** Embedded resources like images */
 data class ContentEmbeddedResource(
     val address: String,
     val altText: String?,
@@ -143,6 +143,33 @@ data class ContentGroup(
     override fun withNewExtras(newExtras: PropertyContainer<ContentNode>): ContentGroup = copy(extra = newExtras)
 }
 
+data class ContentDivergentGroup(
+    override val children: List<ContentDivergentInstance>,
+    override val dci: DCI,
+    override val style: Set<Style>,
+    override val extra: PropertyContainer<ContentNode>,
+    val implicitPlatformHint: Boolean = true
+): ContentComposite {
+    override val platforms: Set<PlatformData>
+            get() = children.flatMap { it.platforms }.distinct().toSet()
+    override fun withNewExtras(newExtras: PropertyContainer<ContentNode>): ContentDivergentGroup = copy(extra = newExtras)
+}
+
+/** Group for grouping contents */
+data class ContentDivergentInstance(
+    val before: ContentNode?,
+    val divergent: ContentNode,
+    val after: ContentNode?,
+    override val dci: DCI,
+    override val platforms: Set<PlatformData>,
+    override val style: Set<Style>,
+    override val extra: PropertyContainer<ContentNode> = PropertyContainer.empty()
+) : ContentComposite {
+    override val children: List<ContentNode>
+        get() = listOfNotNull(before, divergent, after)
+    override fun withNewExtras(newExtras: PropertyContainer<ContentNode>): ContentDivergentInstance = copy(extra = newExtras)
+}
+
 data class PlatformHintedContent(
     val inner: ContentNode,
     override val platforms: Set<PlatformData>
@@ -161,9 +188,6 @@ data class PlatformHintedContent(
     override fun withNewExtras(newExtras: PropertyContainer<ContentNode>) =
         throw UnsupportedOperationException("This method should not be called on this PlatformHintedContent")
 }
-
-/** All extras */
-interface Extra
 
 interface Style
 interface Kind

@@ -21,7 +21,7 @@ open class HtmlRenderer(
     private val pageList = mutableListOf<String>()
 
     override val preprocessors = context.plugin<DokkaBase>().query { htmlPreprocessors } +
-                                    context.plugin<DokkaBase>().querySingle { samplesTransformer }
+            context.plugin<DokkaBase>().querySingle { samplesTransformer }
 
     override fun FlowContent.wrapGroup(
         node: ContentGroup,
@@ -60,21 +60,57 @@ open class HtmlRenderer(
         }
     }
 
-    override fun FlowContent.buildPlatformDependent(content: PlatformHintedContent, pageContext: ContentPage) {
+    override fun FlowContent.buildPlatformDependent(content: PlatformHintedContent, pageContext: ContentPage) =
+        buildPlatformDependent(content.platforms.map { it to setOf(content.inner) }.toMap(), pageContext)
+//        div("platform-hinted") {
+//            attributes["data-platform-hinted"] = "data-platform-hinted"
+//            val contents = content.platforms.mapIndexed { index, platform ->
+//                platform to createHTML(prettyPrint = false).div(classes = "content") {
+//                    if (index == 0) attributes["data-active"] = ""
+//                    attributes["data-togglable"] = platform.targets.joinToString("-")
+//                    buildContentNode(content.inner, pageContext, platform)
+//                }
+//            }
+//
+//            if (contents.size != 1) {
+//                div("platform-bookmarks-row") {
+//                    attributes["data-toggle-list"] = "data-toggle-list"
+//                    contents.forEachIndexed { index, pair ->
+//                        button(classes = "platform-bookmark") {
+//                            if (index == 0) attributes["data-active"] = ""
+//                            attributes["data-toggle"] = pair.first.targets.joinToString("-")
+//                            text(pair.first.targets.joinToString(", "));
+//                        }
+//                    }
+//                }
+//            }
+//
+//            contents.forEach {
+//                consumer.onTagContentUnsafe { +it.second }
+//            }
+//        }
+//    }
+
+    private fun FlowContent.buildPlatformDependent(
+        nodes: Map<PlatformData, Collection<ContentNode>>,
+        pageContext: ContentPage
+    ) {
         div("platform-hinted") {
             attributes["data-platform-hinted"] = "data-platform-hinted"
-            val contents = content.platforms.mapIndexed { index,platform ->
+            val contents = nodes.toList().mapIndexed { index, (platform, elements) ->
                 platform to createHTML(prettyPrint = false).div(classes = "content") {
                     if (index == 0) attributes["data-active"] = ""
                     attributes["data-togglable"] = platform.targets.joinToString("-")
-                    buildContentNode(content.inner, pageContext, platform)
+                    elements.forEach {
+                        buildContentNode(it, pageContext, setOf(platform))
+                    }
                 }
             }
 
-            if(contents.size != 1) {
+            if (contents.size != 1) {
                 div("platform-bookmarks-row") {
                     attributes["data-toggle-list"] = "data-toggle-list"
-                    contents.forEachIndexed { index,pair ->
+                    contents.forEachIndexed { index, pair ->
                         button(classes = "platform-bookmark") {
                             if (index == 0) attributes["data-active"] = ""
                             attributes["data-toggle"] = pair.first.targets.joinToString("-")
@@ -90,17 +126,62 @@ open class HtmlRenderer(
         }
     }
 
+    override fun FlowContent.buildDivergent(node: ContentDivergentGroup, pageContext: ContentPage) {
+        val distinct =
+            node.children.map { instance ->
+//                instance.platforms.map {
+                instance to Pair(
+                    createHTML(prettyPrint = false).div {
+                        instance.before?.let { before ->
+                            buildContentNode(before, pageContext, instance.platforms)
+                        }
+                    }.drop(5).dropLast(6),
+                    createHTML(prettyPrint = false).div {
+                        instance.after?.let { after ->
+                            buildContentNode(after, pageContext, instance.platforms)
+                        }
+                    }.drop(5).dropLast(6)  // TODO: Find a way to do it without arbitrary trims
+                )
+//                }
+            }.groupBy(
+                Pair<ContentDivergentInstance, Pair<String, String>>::second,
+                Pair<ContentDivergentInstance, Pair<String, String>>::first
+            )
+
+        distinct.forEach {
+            consumer.onTagContentUnsafe { +it.key.first }
+            consumer.onTagContentUnsafe {
+                +createHTML(prettyPrint = false).div {
+                    if (node.implicitPlatformHint) {
+                        buildPlatformDependent(
+                            it.value.groupBy { it.platforms }
+                                .flatMap { (platforms, elements) ->
+                                    platforms.map { platform -> platform to elements.map { e -> e.divergent } }
+                                }.toMap(),
+                            pageContext
+                        )
+                    } else {
+                        it.value.forEach {
+                            buildContentNode(it, pageContext, null)
+                        }
+                    }
+                }.drop(5).dropLast(6)
+            }
+            consumer.onTagContentUnsafe { +it.key.second }
+        }
+    }
+
     override fun FlowContent.buildList(
         node: ContentList,
         pageContext: ContentPage,
-        platformRestriction: PlatformData?
+        platformRestriction: Set<PlatformData>?
     ) = if (node.ordered) ol { buildListItems(node.children, pageContext, platformRestriction) }
     else ul { buildListItems(node.children, pageContext, platformRestriction) }
 
     open fun OL.buildListItems(
         items: List<ContentNode>,
         pageContext: ContentPage,
-        platformRestriction: PlatformData? = null
+        platformRestriction: Set<PlatformData>? = null
     ) {
         items.forEach {
             if (it is ContentList)
@@ -113,7 +194,7 @@ open class HtmlRenderer(
     open fun UL.buildListItems(
         items: List<ContentNode>,
         pageContext: ContentPage,
-        platformRestriction: PlatformData? = null
+        platformRestriction: Set<PlatformData>? = null
     ) {
         items.forEach {
             if (it is ContentList)
@@ -140,46 +221,48 @@ open class HtmlRenderer(
     private fun TBODY.buildPlatformTaggedRow(
         node: ContentTable,
         pageContext: ContentPage,
-        platformRestriction: PlatformData?
+        platformRestriction: Set<PlatformData>?
     ) {
-        node.children.filter { platformRestriction == null || platformRestriction in it.platforms }.forEach {
-            tr("platform-tagged") {
-                it.children.forEach {
-                    td("content") {
-                        it.build(this, pageContext, platformRestriction)
+        node.children.filter { platformRestriction == null || it.platforms.any { p -> p in platformRestriction } }
+            .forEach {
+                tr("platform-tagged") {
+                    it.children.forEach {
+                        td("content") {
+                            it.build(this, pageContext, platformRestriction)
+                        }
                     }
-                }
-                td("platform-tagged") {
-                    it.platforms.forEach {
-                        div(("platform-tag ${it.platformType.key}")) {
-                            text(it.platformType.key.toUpperCase())
+                    td("platform-tagged") {
+                        it.platforms.forEach {
+                            div(("platform-tag ${it.platformType.key}")) {
+                                text(it.platformType.key.toUpperCase())
+                            }
                         }
                     }
                 }
             }
-        }
     }
 
     private fun TBODY.buildRow(
         node: ContentTable,
         pageContext: ContentPage,
-        platformRestriction: PlatformData?
+        platformRestriction: Set<PlatformData>?
     ) {
-        node.children.filter { platformRestriction == null || platformRestriction in it.platforms }.forEach {
-            tr {
-                it.children.forEach {
-                    td {
-                        it.build(this, pageContext, platformRestriction)
+        node.children.filter { platformRestriction == null || it.platforms.any { p -> p in platformRestriction } }
+            .forEach {
+                tr {
+                    it.children.forEach {
+                        td {
+                            it.build(this, pageContext, platformRestriction)
+                        }
                     }
                 }
             }
-        }
     }
 
     override fun FlowContent.buildTable(
         node: ContentTable,
         pageContext: ContentPage,
-        platformRestriction: PlatformData?
+        platformRestriction: Set<PlatformData>?
     ) {
         table {
             thead {

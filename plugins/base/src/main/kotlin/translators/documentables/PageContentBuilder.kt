@@ -25,6 +25,18 @@ open class PageContentBuilder(
         extra: PropertyContainer<ContentNode> = PropertyContainer.empty(),
         block: DocumentableContentBuilder.() -> Unit
     ): ContentGroup =
+        DocumentableContentBuilder(setOf(dri), platformData, styles, extra)
+            .apply(block)
+            .build(platformData, kind, styles, extra)
+
+    fun contentFor(
+        dri: Set<DRI>,
+        platformData: Set<PlatformData>,
+        kind: Kind = ContentKind.Main,
+        styles: Set<Style> = emptySet(),
+        extra: PropertyContainer<ContentNode> = PropertyContainer.empty(),
+        block: DocumentableContentBuilder.() -> Unit
+    ): ContentGroup =
         DocumentableContentBuilder(dri, platformData, styles, extra)
             .apply(block)
             .build(platformData, kind, styles, extra)
@@ -37,13 +49,13 @@ open class PageContentBuilder(
         platformData: Set<PlatformData> = d.platformData.toSet(),
         block: DocumentableContentBuilder.() -> Unit = {}
     ): ContentGroup =
-        DocumentableContentBuilder(d.dri, platformData, styles, extra)
+        DocumentableContentBuilder(setOf(d.dri), platformData, styles, extra)
             .apply(block)
             .build(platformData, kind, styles, extra)
 
     @ContentBuilderMarker
     open inner class DocumentableContentBuilder(
-        val mainDRI: DRI,
+        val mainDRI: Set<DRI>,
         val mainPlatformData: Set<PlatformData>,
         val mainStyles: Set<Style>,
         val mainExtra: PropertyContainer<ContentNode>
@@ -57,7 +69,7 @@ open class PageContentBuilder(
             extra: PropertyContainer<ContentNode>
         ) = ContentGroup(
             contents.toList(),
-            DCI(setOf(mainDRI), kind),
+            DCI(mainDRI, kind),
             platformData,
             styles,
             extra
@@ -110,13 +122,12 @@ open class PageContentBuilder(
                         link(it.classNames ?: "", it)
                     }
                 },
-                DCI(setOf(mainDRI), kind),
+                DCI(mainDRI, kind),
                 platformData, styles, extra
             )
         }
 
         fun table(
-            dri: DRI = mainDRI,
             kind: Kind = ContentKind.Main,
             platformData: Set<PlatformData> = mainPlatformData,
             styles: Set<Style> = mainStyles,
@@ -126,7 +137,7 @@ open class PageContentBuilder(
             contents += ContentTable(
                 emptyList(),
                 operation(),
-                DCI(setOf(mainDRI), kind),
+                DCI(mainDRI, kind),
                 platformData, styles, extra
             )
         }
@@ -147,11 +158,11 @@ open class PageContentBuilder(
                 contents += ContentTable(
                     emptyList(),
                     elements.map {
-                        buildGroup(it.dri, it.platformData.toSet(), kind, styles, extra) {
+                        buildGroup(setOf(it.dri), it.platformData.toSet(), kind, styles, extra) {
                             operation(it)
                         }
                     },
-                    DCI(setOf(mainDRI), kind),
+                    DCI(mainDRI, kind),
                     platformData, styles, extra
                 )
             }
@@ -187,7 +198,7 @@ open class PageContentBuilder(
             contents += ContentDRILink(
                 listOf(createText(text, kind, platformData, styles, extra)),
                 address,
-                DCI(setOf(mainDRI), kind),
+                DCI(mainDRI, kind),
                 platformData
             )
         }
@@ -203,7 +214,7 @@ open class PageContentBuilder(
             contents += ContentDRILink(
                 contentFor(mainDRI, platformData, kind, styles, extra, block).children,
                 address,
-                DCI(setOf(mainDRI), kind),
+                DCI(mainDRI, kind),
                 platformData
             )
         }
@@ -217,14 +228,14 @@ open class PageContentBuilder(
         ) {
             val content = commentsConverter.buildContent(
                 docTag,
-                DCI(setOf(mainDRI), kind),
+                DCI(mainDRI, kind),
                 platformData
             )
-            contents += ContentGroup(content, DCI(setOf(mainDRI), kind), platformData, styles, extra)
+            contents += ContentGroup(content, DCI(mainDRI, kind), platformData, styles, extra)
         }
 
         fun group(
-            dri: DRI = mainDRI,
+            dri: Set<DRI> = mainDRI,
             platformData: Set<PlatformData> = mainPlatformData,
             kind: Kind = ContentKind.Main,
             styles: Set<Style> = mainStyles,
@@ -234,8 +245,22 @@ open class PageContentBuilder(
             contents += buildGroup(dri, platformData, kind, styles, extra, block)
         }
 
+        fun divergentGroup(
+            dri: Set<DRI> = mainDRI,
+            platformData: Set<PlatformData> = mainPlatformData,
+            kind: Kind = ContentKind.Main,
+            styles: Set<Style> = mainStyles,
+            extra: PropertyContainer<ContentNode> = mainExtra,
+            block: DivergentBuilder.() -> Unit
+        ) {
+            contents +=
+                DivergentBuilder(dri, platformData, kind, styles, extra)
+                    .apply(block)
+                    .build()
+        }
+
         fun buildGroup(
-            dri: DRI = mainDRI,
+            dri: Set<DRI> = mainDRI,
             platformData: Set<PlatformData> = mainPlatformData,
             kind: Kind = ContentKind.Main,
             styles: Set<Style> = mainStyles,
@@ -244,7 +269,7 @@ open class PageContentBuilder(
         ): ContentGroup = contentFor(dri, platformData, kind, styles, extra, block)
 
         fun platformDependentHint(
-            dri: DRI = mainDRI,
+            dri: Set<DRI> = mainDRI,
             platformData: Set<PlatformData> = mainPlatformData,
             kind: Kind = ContentKind.Main,
             styles: Set<Style> = mainStyles,
@@ -257,6 +282,20 @@ open class PageContentBuilder(
             )
         }
 
+        fun platformDependentHint(
+            dri: DRI,
+            platformData: Set<PlatformData> = mainPlatformData,
+            kind: Kind = ContentKind.Main,
+            styles: Set<Style> = mainStyles,
+            extra: PropertyContainer<ContentNode> = mainExtra,
+            block: DocumentableContentBuilder.() -> Unit
+        ) {
+            contents += PlatformHintedContent(
+                buildGroup(setOf(dri), platformData, kind, styles, extra, block),
+                platformData
+            )
+        }
+
         protected fun createText(
             text: String,
             kind: Kind,
@@ -264,7 +303,7 @@ open class PageContentBuilder(
             styles: Set<Style>,
             extra: PropertyContainer<ContentNode>
         ) =
-            ContentText(text, DCI(setOf(mainDRI), kind), platformData, styles, extra)
+            ContentText(text, DCI(mainDRI, kind), platformData, styles, extra)
 
         fun <T> platformText(
             value: PlatformDependent<T>,
@@ -273,5 +312,96 @@ open class PageContentBuilder(
         ) = value.entries.filter { it.key in platforms }.forEach { (p, v) ->
             transform(v).takeIf { it.isNotBlank() }?.also { text(it, platformData = setOf(p)) }
         }
+    }
+
+    @ContentBuilderMarker
+    open inner class DivergentBuilder(
+        private val mainDRI: Set<DRI>,
+        private val mainPlatformData: Set<PlatformData>,
+        private val mainKind: Kind,
+        private val mainStyles: Set<Style>,
+        private val mainExtra: PropertyContainer<ContentNode>
+    ) {
+        private val instances: MutableList<ContentDivergentInstance> = mutableListOf()
+        fun instance(
+            dri: Set<DRI>,
+            platformData: Set<PlatformData>,  // Having correct PlatformData is crucial here, that's why there's no default
+            kind: Kind = mainKind,
+            styles: Set<Style> = mainStyles,
+            extra: PropertyContainer<ContentNode> = mainExtra,
+            block: DivergentInstanceBuilder.() -> Unit
+        ) {
+            instances += DivergentInstanceBuilder(dri, platformData, styles, extra)
+                .apply(block)
+                .build(kind)
+        }
+
+        fun build(
+            kind: Kind = mainKind,
+            styles: Set<Style> = mainStyles,
+            extra: PropertyContainer<ContentNode> = mainExtra
+        ) = ContentDivergentGroup(instances.toList(), DCI(mainDRI, kind), styles, extra)
+    }
+
+    @ContentBuilderMarker
+    open inner class DivergentInstanceBuilder(
+        private val mainDRI: Set<DRI>,
+        private val mainPlatformData: Set<PlatformData>,
+        private val mainStyles: Set<Style>,
+        private val mainExtra: PropertyContainer<ContentNode>
+    ) {
+        private var before: ContentNode? = null
+        private var divergent: ContentNode? = null
+        private var after: ContentNode? = null
+
+        fun before(
+            dri: Set<DRI> = mainDRI,
+            platformData: Set<PlatformData> = mainPlatformData,
+            kind: Kind = ContentKind.Main,
+            styles: Set<Style> = mainStyles,
+            extra: PropertyContainer<ContentNode> = mainExtra,
+            block: DocumentableContentBuilder.() -> Unit
+        ) {
+            before = contentFor(dri, platformData, kind, styles, extra, block)
+        }
+
+        fun divergent(
+            dri: Set<DRI> = mainDRI,
+            platformData: Set<PlatformData> = mainPlatformData,
+            kind: Kind = ContentKind.Main,
+            styles: Set<Style> = mainStyles,
+            extra: PropertyContainer<ContentNode> = mainExtra,
+            block: DocumentableContentBuilder.() -> Unit
+        ) {
+            divergent = contentFor(dri, platformData, kind, styles, extra, block)
+        }
+
+        fun after(
+            dri: Set<DRI> = mainDRI,
+            platformData: Set<PlatformData> = mainPlatformData,
+            kind: Kind = ContentKind.Main,
+            styles: Set<Style> = mainStyles,
+            extra: PropertyContainer<ContentNode> = mainExtra,
+            block: DocumentableContentBuilder.() -> Unit
+        ) {
+            after = contentFor(dri, platformData, kind, styles, extra, block)
+        }
+
+
+        fun build(
+            kind: Kind,
+            platformData: Set<PlatformData> = mainPlatformData,
+            styles: Set<Style> = mainStyles,
+            extra: PropertyContainer<ContentNode> = mainExtra
+        ) =
+            ContentDivergentInstance(
+                before,
+                divergent!!,
+                after,
+                DCI(mainDRI, kind),
+                platformData,
+                styles,
+                extra
+            )
     }
 }

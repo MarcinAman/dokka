@@ -1,6 +1,7 @@
 package org.jetbrains.dokka.base.renderers
 
 import kotlinx.coroutines.*
+import kotlinx.html.FlowContent
 import org.jetbrains.dokka.base.DokkaBase
 import org.jetbrains.dokka.base.resolvers.local.LocationProvider
 import org.jetbrains.dokka.pages.*
@@ -26,7 +27,7 @@ abstract class DefaultRenderer<T>(
     abstract fun T.buildList(
         node: ContentList,
         pageContext: ContentPage,
-        platformRestriction: PlatformData? = null
+        platformRestriction: Set<PlatformData>? = null
     )
 
     abstract fun T.buildNewLine()
@@ -34,7 +35,7 @@ abstract class DefaultRenderer<T>(
     abstract fun T.buildTable(
         node: ContentTable,
         pageContext: ContentPage,
-        platformRestriction: PlatformData? = null
+        platformRestriction: Set<PlatformData>? = null
     )
 
     abstract fun T.buildText(textNode: ContentText)
@@ -49,9 +50,12 @@ abstract class DefaultRenderer<T>(
     open fun T.buildGroup(
         node: ContentGroup,
         pageContext: ContentPage,
-        platformRestriction: PlatformData? = null
+        platformRestriction: Set<PlatformData>? = null
     ) =
         wrapGroup(node, pageContext) { node.children.forEach { it.build(this, pageContext, platformRestriction) } }
+
+    open fun T.buildDivergent(node: ContentDivergentGroup, pageContext: ContentPage) =
+         node.children.forEach { it.build(this, pageContext) }
 
     open fun T.wrapGroup(node: ContentGroup, pageContext: ContentPage, childrenCallback: T.() -> Unit) =
         childrenCallback()
@@ -59,7 +63,7 @@ abstract class DefaultRenderer<T>(
     open fun T.buildLinkText(
         nodes: List<ContentNode>,
         pageContext: ContentPage,
-        platformRestriction: PlatformData? = null
+        platformRestriction: Set<PlatformData>? = null
     ) {
         nodes.forEach { it.build(this, pageContext, platformRestriction) }
     }
@@ -71,7 +75,7 @@ abstract class DefaultRenderer<T>(
     open fun T.buildHeader(
         node: ContentHeader,
         pageContext: ContentPage,
-        platformRestriction: PlatformData? = null
+        platformRestriction: Set<PlatformData>? = null
     ) {
         buildHeader(node.level) { node.children.forEach { it.build(this, pageContext, platformRestriction) } }
     }
@@ -79,16 +83,18 @@ abstract class DefaultRenderer<T>(
     open fun ContentNode.build(
         builder: T,
         pageContext: ContentPage,
-        platformRestriction: PlatformData? = null
+        platformRestriction: Set<PlatformData>? = null
     ) =
         builder.buildContentNode(this, pageContext, platformRestriction)
 
     open fun T.buildContentNode(
         node: ContentNode,
         pageContext: ContentPage,
-        platformRestriction: PlatformData? = null
+        platformRestriction: Set<PlatformData>? = null
     ) {
-        if (platformRestriction == null || platformRestriction in node.platforms) {
+//        node.platforms.containsAll(platformRestriction)
+//        node.platforms(platformRestriction)
+        if (platformRestriction == null || node.platforms.any { it in platformRestriction }  ) {
             when (node) {
                 is ContentText -> buildText(node)
                 is ContentHeader -> buildHeader(node, pageContext, platformRestriction)
@@ -106,6 +112,7 @@ abstract class DefaultRenderer<T>(
                 is ContentGroup -> buildGroup(node, pageContext, platformRestriction)
                 is ContentBreakLine -> buildNewLine()
                 is PlatformHintedContent -> buildPlatformDependent(node, pageContext)
+                is ContentDivergentGroup -> buildDivergent(node, pageContext)
                 else -> buildError(node)
             }
         }

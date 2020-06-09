@@ -43,7 +43,7 @@ private fun <T> mergeExpectActual(
 
     fun analyzeExpectActual(sameDriElements: List<T>) = sameDriElements.reduce(reducer)
 
-    return elements.groupBy { it.dri }.values.map(::analyzeExpectActual)
+    return elements.groupBy { it.dri to it.javaClass.simpleName }.values.map(::analyzeExpectActual)
 }
 
 fun DPackage.mergeWith(other: DPackage): DPackage = copy(
@@ -87,7 +87,7 @@ fun DClasslike.mergeWith(other: DClasslike): DClasslike = when {
     this is DInterface && other is DInterface -> mergeWith(other)
     this is DObject && other is DObject -> mergeWith(other)
     this is DAnnotation && other is DAnnotation -> mergeWith(other)
-    else -> throw IllegalStateException("${this::class.qualifiedName} ${this.name} cannot be mergesd with ${other::class.qualifiedName} ${other.name}")
+    else -> throw IllegalStateException("${this::class.qualifiedName} ${this.name} cannot be merged with ${other::class.qualifiedName} ${other.name}")
 }
 
 fun DClass.mergeWith(other: DClass): DClass = copy(

@@ -17,10 +17,7 @@ import org.jetbrains.dokka.base.transformers.documentables.DocumentableVisibilit
 import org.jetbrains.dokka.base.transformers.documentables.ModuleAndPackageDocumentationTransformer
 import org.jetbrains.dokka.base.transformers.pages.comments.CommentsToContentConverter
 import org.jetbrains.dokka.base.transformers.pages.comments.DocTagToContentConverter
-import org.jetbrains.dokka.base.transformers.pages.merger.FallbackPageMergerStrategy
-import org.jetbrains.dokka.base.transformers.pages.merger.PageMerger
-import org.jetbrains.dokka.base.transformers.pages.merger.PageMergerStrategy
-import org.jetbrains.dokka.base.transformers.pages.merger.SameMethodNamePageMergerStrategy
+import org.jetbrains.dokka.base.transformers.pages.merger.*
 import org.jetbrains.dokka.base.transformers.pages.samples.DefaultSamplesTransformer
 import org.jetbrains.dokka.base.transformers.pages.sourcelinks.SourceLinksTransformer
 import org.jetbrains.dokka.base.translators.descriptors.DefaultDescriptorToDocumentableTranslator
@@ -98,6 +95,12 @@ class DokkaBase : DokkaPlugin() {
     val sameMethodNameMerger by extending {
         pageMergerStrategy with SameMethodNamePageMergerStrategy order {
             before(fallbackMerger)
+        }
+    }
+
+    val sameClassNameMerger by extending {
+        pageMergerStrategy with SameClassNamePageMergerStrategy order {
+            before(sameMethodNameMerger)
         }
     }
 
